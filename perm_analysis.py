@@ -5,12 +5,11 @@ Created on Sun Nov 24 00:50:44 2013
 @author: Talmo
 """
 
-from gpu import gpu_pssm
+from gpu_pssm import gpu_pssm
 import metagenomics as mg
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
 
 def main():
     # Parameters
@@ -76,7 +75,7 @@ def main():
         plt.plot(bins[1:], score, "D-r", alpha=0.5, label="Permutation")
     plt.plot(bins[1:], patient_scores[0], 'D-b', lw=3, label="Original")
     plt.xlabel("Site score (bits)")
-    plt.ylabel("Probability istribution function")
+    plt.ylabel("Probability distribution function")
     handles, labels = plt.gca().get_legend_handles_labels()
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
