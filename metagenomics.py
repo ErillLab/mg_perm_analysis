@@ -114,9 +114,11 @@ def pssm2cols(pssm):
 
     The reverse of this function is simply pssm2cols(pssm).flatten().
     
+    To get an array of ROW vectors, transpose the output of this function.
+    
     Args:
         pssm: An array of size 4 * w, where w is the width of the PSSM, or the
-            number of columns it has.
+            number of columns it has. This array must be 1-dimensional.
     
     Returns:
         pssm_cols: A two dimensional array containing the values of pssm.
@@ -131,6 +133,11 @@ def pssm2cols(pssm):
                [ 4,  5,  6,  7],
                [ 8,  9, 10, 11],
                [12, 13, 14, 15]])
+       >>> pssm2cols(pssm).transpose()
+       array([[ 0,  4,  8, 12],
+              [ 1,  5,  9, 13],
+              [ 2,  6, 10, 14],
+              [ 3,  7, 11, 15]])
        
        For a more readable representation, using print_pssm() which breaks the
        pssm into columns automatically if necessary:
@@ -197,15 +204,123 @@ def permute_pssm(pssm):
     return perm_pssm
 
 
-def print_pssm(pssm, max_width=130):
+def pssm2str(pssm, max_width=130):
     """
-    Prints the PSSM in tabular form that is easily readable.
+    Renders the PSSM in a string in tabular form that is easily readable.
     
     Args:
         pssm: A 1- or 2-dimensional numpy array of PSSM values.
             Note: If the array is flat, or 1-dimensional, it will be converted
-            internally to a 2d array, so it does not need to be broken into
+            internally to a 2d col array, so it does not need to be broken into
             columns before being passed to the function.
+        max_width: The width of the console in characters. Columns of the PSSM
+            will be wrapped past this number of characters.
+    
+    Returns:
+        table: A string containing the table.
+    
+    See also: print_pssm() which is a wrapper for this function.
+    """
+    # Convert to 2D array if needed
+    _pssm = pssm
+    if len(pssm.shape) == 1:
+        _pssm = pssm2cols(pssm)
+    cols = int(_pssm.shape[0])
+    rows = int(_pssm.shape[1])    
+    
+    # Calculate in how many rows we'll display the output
+    cols_per_output = int(max_width - 4) / 9
+    
+    # Initialize output string
+    table = ""
+    
+    # Construct the table
+    for metacol in range(0, cols, cols_per_output):
+        # Table header
+        table += " " * 4 # Nucleotide label column
+        for col in range(metacol, min(metacol + cols_per_output, cols)):
+            table += "| %6d " % col
+        table += "|\n"
+        table += "-" * (9 * min(cols_per_output, min(metacol + cols_per_output, cols) - metacol) + 5)
+        table += "\n"
+        
+        # Table body
+        for row in range(rows):
+            table += "| " + bases[row] + " "
+            for col in range(metacol, min(metacol + cols_per_output, cols)):
+                table += "| %6.3f " % (_pssm[col][row])
+            table += "|\n"
+            
+        table += "-" * (9 * min(cols_per_output, min(metacol + cols_per_output, cols) - metacol) + 5)
+        table += "\n"
+
+    return table
+
+
+def pssm2csv(pssm, delim=","):
+    """
+    Returns the PSSM as a comma-separated value string.
+    
+    Args:
+        pssm: A 1- or 2-dimensional numpy array of PSSM values.
+            Note: If the array is flat, or 1-dimensional, it will be converted
+            internally to a 2d col array, so it does not need to be broken into
+            columns before being passed to the function.
+        delim: Separator character for cells. Alternatives to a comma might be
+            a space (" ") or a tab character ("\t").
+        
+    Returns:
+        csv: A CSV-formatted string representation of the PSSM.
+    
+    Example:
+        >>> cols = 4
+        >>> pssm = np.array(range(0, 4 * cols))  # Generate a naive PSSM
+        >>> print pssm2csv(pssm)
+        A,0,4,8,12
+        C,1,5,9,13
+        G,2,6,10,14
+        T,3,7,11,15
+        >>> print_pssm(pssm) # For comparison
+            |      0 |      1 |      2 |      3 |
+        -----------------------------------------
+        | A |  0.000 |  4.000 |  8.000 | 12.000 |
+        | C |  1.000 |  5.000 |  9.000 | 13.000 |
+        | G |  2.000 |  6.000 | 10.000 | 14.000 |
+        | T |  3.000 |  7.000 | 11.000 | 15.000 |
+        -----------------------------------------
+    """
+    # Convert to 2D array if needed
+    _pssm = pssm
+    if len(pssm.shape) == 1:
+        _pssm = pssm2cols(pssm)
+    
+    # Transpose the column vectors into row vectors
+    _pssm = _pssm.transpose()
+
+    # Initialize CSV string
+    csv = ""
+    
+    # Build each row of the PSSM string
+    for row, base in enumerate(bases):
+        csv += base + delim
+        csv += delim.join([str(cell) for cell in _pssm[row].tolist()])
+        csv += "\n"
+    
+    return csv
+
+
+def print_pssm(pssm, max_width=130):
+    """
+    Prints the PSSM in tabular form that is easily readable. This function is
+    just a wrapper for pssm2str().
+    
+    Args:
+        pssm: A 1- or 2-dimensional numpy array of PSSM values.
+            Note: If the array is flat, or 1-dimensional, it will be converted
+            internally to a 2d col array, so it does not need to be broken into
+            columns before being passed to the function.
+        max_width: The width of the console in characters. Columns of the PSSM
+            will be wrapped past this number of characters.
         
     Example:
         >>> cols = 4
@@ -219,32 +334,7 @@ def print_pssm(pssm, max_width=130):
         | T | -2.886 | -4.886 |  1.919 | -4.437 |
         -----------------------------------------
     """
-    # Convert to 2D array if needed
-    _pssm = pssm
-    if len(pssm.shape) == 1:
-        _pssm = pssm2cols(pssm)
-    cols = int(_pssm.shape[0])
-    rows = int(_pssm.shape[1])    
-    
-    # Calculate in how many rows we'll display the output
-    cols_per_output = int(max_width - 4) / 9
-    
-    for metacol in range(0, cols, cols_per_output):
-        # Table header
-        print " " * 3, # Nucleotide label column
-        for col in range(metacol, min(metacol + cols_per_output, cols)):
-            print "| %6d" % col,
-        print "|"
-        print "-" * (9 * min(cols_per_output, min(metacol + cols_per_output, cols) - metacol) + 5)
-        
-        # Table body
-        for row in range(rows):
-            print "|", bases[row],
-            for col in range(metacol, min(metacol + cols_per_output, cols)):
-                print "| %6.3f" % (_pssm[col][row]),
-            print "|"
-            
-        print "-" * (9 * min(cols_per_output, min(metacol + cols_per_output, cols) - metacol) + 5)
+    print pssm2str(pssm, max_width=max_width)
 
 
 def int2nt(int_seq):
