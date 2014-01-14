@@ -81,9 +81,9 @@ def load_scaffolds(filename):
             else:
                 # Keep sequence as the charcode integers
                 scaffold_seq = np.array(line.strip(), "c").view(np.uint8)
-                
+
                 # Replace the sequence chunk in memory
-                sequence[pos:pos + len(scaffold_seq)] = scaffold_seq
+                sequence[pos:pos + len(np.atleast_1d(scaffold_seq))] = scaffold_seq
                 
                 if next_line_starts_scaffold:
                     # Keep track of the beginning of scaffolds
@@ -91,7 +91,7 @@ def load_scaffolds(filename):
                     next_line_starts_scaffold = False
                 
                 # Update position in the sequence array
-                pos += len(scaffold_seq)
+                pos += len(np.atleast_1d(scaffold_seq))
                 
     # Truncate the sequence array to fit the data
     sequence = sequence[0:np.where(sequence == -1)[0][0]]

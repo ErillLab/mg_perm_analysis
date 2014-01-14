@@ -35,7 +35,7 @@ def main():
     # disk!
     # The original paper can be found at:
     #   http://www.nature.com/nature/journal/v464/n7285/full/nature08821.html
-    metahit_path = "../MetaHit"
+    metahit_path = "./MetaHit/Pruned"
     
     # The collection of binding sites to generate the PSSM from.
     # LexA.seq.fa is a collection of 115 experimentally-determined binding
@@ -79,7 +79,7 @@ def main():
     ##########
     
     # Find patient files on disk
-    metahit_db = glob.glob(metahit_path + "/MH[0-9]*.seq.fa")
+    metahit_db = glob.glob(metahit_path + "/Pruned_MH[0-9]*.seq.fa")
     if score_ecoli_instead:
         metahit_db = ["../NC_000913.fna"] # E. coli genome (for debugging)
     
@@ -100,6 +100,8 @@ def main():
         
         # Calculate the original PSSM from binding sites
         original_pssm = gpu_pssm.create_pssm(binding_sites_path, genome_frequencies = mg_frequencies)
+
+        # Print the unpermuted PSSM        
         print "Unpermuted PSSM:"
         mg.print_pssm(original_pssm)
         
@@ -115,12 +117,13 @@ def main():
             # Permute the PSSM
             pssm = mg.permute_pssm(original_pssm)
             
+            
             # Re-score using permuted PSSM
             perm_scores = score_patient(metagenome, scaffolds, pssm, score_threshold, bins)            
             
             # Save the distribution of the scores
             patient_scores.append(perm_scores)
-    
+ 
     # Plot results
     plt.figure()
     for score in patient_scores[1:]:
@@ -146,7 +149,22 @@ def main():
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
 
-
+    print "Statistics:"
+    print "Orginal: "
+    print "Avg: " % (np.mean(patient_scores[0]))
+    print "Median: " % (np.median(patient_scores[0]))
+    print "Std: " % (np.std(patient_scores[0]))
+    print 
+    
+    iteration = 1
+    for score in patient_scores[1:]:
+        print "Permutation %d" % iteration
+        print "Avg: " % (np.mean(score))
+        print "Median: " % (np.median(score))
+        print "Std: " % (np.std(score))
+        print 
+        iteration += 1
+        
 def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
     # Score the metagenome with the new PSSM
     scores = gpu_pssm.score_long_sequence(metagenome, pssm, keep_strands=False)

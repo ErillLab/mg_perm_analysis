@@ -16,7 +16,7 @@ import numpy as np
 
 ### Global Settings ###
 #Name of the file that holds the gene annotations
-gene_prediction = "../BGI_GeneSet20090523_annotation"
+gene_prediction = "Metahit/BGI_GeneSet20090523_annotation"
 #Regex pattern that matches the patient files
 filepattern = "MH[\d]+"
 #Regex pattern that matches the scaffold/contig lines in the annotation and patient files
@@ -58,7 +58,7 @@ def preprocess_file(filename):
 		#Preallocates array based on the number of lines in the file
 		g.seek(0,os.SEEK_END)
 		pos = g.tell()
-		gene_locations = np.empty(pos, dtype="S256")
+		gene_locations = np.empty(pos, dtype="S128")
 		g.seek(0,os.SEEK_SET)
 		index = 0
 
@@ -110,8 +110,8 @@ def prune_files(gene_locations):
 
 	for file_name in sorted_file_list:
 		#Open both the patient file and the output file
-		f = open("../MetaGenome/Data/%s.seq.fa" % file_name, "r")
-		pruned_file = open("Pruned_%s.seq.fa" % file_name, "w")
+		f = open("MetaHit/Data/%s.seq.fa" % file_name, "r")
+		pruned_file = open("MetaHit/Pruned/Pruned_%s.seq.fa" % file_name, "w")
 
 		#Keep user updated towards execution status
 		print "Starting: ", file_name
