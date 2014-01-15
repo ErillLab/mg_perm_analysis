@@ -1,4 +1,3 @@
-
 """
 @author: David 
 
@@ -8,21 +7,26 @@ from patient files.
 Dependencies:
 	- Numpy
 
-Assumes that files to be parsed are in lexicographic order.
+Assumes:
+	 1. Files to be parsed are in lexicographic order.
+	 2. Ignores regions that overlap with each other
+	 3. Ignores regions that are at the begining of the scaffold/contig (if start: 1-299) 
 """
 
-import re, sys, os, time
+import re, os, sys, time
 import numpy as np
 
 ### Global Settings ###
 #Name of the file that holds the gene annotations
-gene_prediction = "Metahit/BGI_GeneSet20090523_annotation"
+gene_prediction = "../MetaGenome/BGI_GeneSet20090523_annotation"
 #Regex pattern that matches the patient files
 filepattern = "MH[\d]+"
 #Regex pattern that matches the scaffold/contig lines in the annotation and patient files
-scaffoldpattern = "(?:scaffold|c)[\d]+[^\d][\d]+"
-#Regex pattern that matches the start and end positions in the annotation file
-genepattern = ":[\d]+|:[\d]+"
+gene_region_pattern = "((?:scaffold|c)[\d]+[^\d][\d]+):([\d]+):([\d]+)"
+#Regex pattern that matches the scaffold/contig label 
+scaffold_pattern  = "((?:scaffold|c)[\d]+[^\d][\d]+)"
+#Regex pattern that matches the start and stop regions
+region_pos_pattern = ":([\d]+):([\d]+)"
 #A set that holds the file listings to keep track of unique files
 file_list = set()
 
@@ -48,10 +52,10 @@ def preprocess_file(filename):
 		It only holds lines that match with the pattern mentioned above. 
 
 	"""
-
+	
 	#Compile the pattern to decrease the time it takes to search
 	file_pattern_object = re.compile(filepattern)
-
+	gene_region_pattern_object = re.compile(gene_region_pattern, re.IGNORECASE)
 
 	with open(filename) as g:
 		#Trick borrowed from Talmo
@@ -70,9 +74,10 @@ def preprocess_file(filename):
 			#if match is found insert entire line into list
 			if match:
 				file_list.add(match.group(0))
-				gene_locations[index] = line
+				line_match = gene_region_pattern_object.search(line)
+				gene_locations[index] = line_match.group(0)
 				index += 1
-
+	
 	return gene_locations
 
 def prune_files(gene_locations):
@@ -96,27 +101,24 @@ def prune_files(gene_locations):
 
 	"""
 
-	#Compile patterns to speed up search process
-	gene_pattern_object = re.compile(genepattern, re.IGNORECASE)
-	scaffold_pattern_object = re.compile(scaffoldpattern, re.IGNORECASE)
-
-	#A checker to verify that the program is working with one file at a time.
-	file_checker = ""
-
 	#Convert set into list and sort it to match with global array
 	sorted_file_list = sorted(list(file_list))
 	annotation_index = 0
 
+	#Scaffold pattern to match 
+	scaffold_pattern_object = re.compile(scaffold_pattern, re.IGNORECASE)
+	region_pos_pattern_object = re.compile(region_pos_pattern)
 
 	for file_name in sorted_file_list:
 		#Open both the patient file and the output file
-		f = open("MetaHit/Data/%s.seq.fa" % file_name, "r")
-		pruned_file = open("MetaHit/Pruned/Pruned_%s.seq.fa" % file_name, "w")
+		f = open("../MetaGenome/Data/%s.seq.fa" % file_name, "r")
+		pruned_file = open("Pruned_%s.seq.fa" % file_name, "w")
 
 		#Keep user updated towards execution status
 		print "Starting: ", file_name
 		file_start = time.time()
 
+		#Python's ghetto do-while 
 		while True:
 			# Grab the first two lines of the patient file
 			header = f.readline().strip()
@@ -134,69 +136,57 @@ def prune_files(gene_locations):
 
 				#Annotation file can hold locations on the same scaffold
 				#Grab all relevant lines
-				while re.search(scaffold_match.group(0),gene_locations[annotation_index]):
-					total_lines.append(gene_locations[annotation_index])
-					annotation_index += 1
-
-				#Grab the start and stop positions 
-				#Creates a 2d array: [[":2", ":100"], [":1", ":50"] ...]
-				match = map(gene_pattern_object.findall, total_lines)
-
-				#If only one line for a particular sequence
-				if len(match) == 1:
-					start = int(match[0][0][1:])
-					end = int(match[0][1][1:])
-
-					# Write out the intergenic region
-					# If region is not at start of sequence then write from beginning to start
-					if start != 1:
-						pruned_file.write("%s:%d:%d\n" % (header,1,start))
-						pruned_file.write("%s\n" % sequence[0:start-1])
-
-						#If the reqion does finish at the end of the sequence, then write from end of region to end of sequence
-						if end != len(sequence):
-							pruned_file.write("%s:%d:%d\n" % (header,end,len(sequence)))
-							pruned_file.write("%s\n" % sequence[end:len(sequence)])
-
-					#If the gene region starts of at the beginning of the sequence just write from end of region to end of sequence
+				while True:
+					if re.search(scaffold_match.group(0), gene_locations[annotation_index]):
+						region_pos_match = region_pos_pattern_object.search(gene_locations[annotation_index])
+						total_lines.append([region_pos_match.group(1), region_pos_match.group(2)])
+						annotation_index += 1
 					else:
-						pruned_file.write("%s:%d:%d\n" % (header,end,len(sequence)))
-						pruned_file.write("%s\n" % sequence[end:len(sequence)])
+						break
+				#If only one line for a particular sequence
+				if len(total_lines) == 1:
+					start = int(total_lines[0][0])
+					end = int(total_lines[0][1])
+
+					# Get the promoter region
+					if (start-300) >= 1:
+						pruned_file.write("%s:%d:%d\n" % (header,start-300,start+50))
+						pruned_file.write("%s\n" % sequence[start-301:start+49])
+
 				else:
 					#If there are more then one line
 					begin = 1
-					for indicies in match:
-						start = int(indicies[0][1:])
-						end = int(indicies[1][1:])
+					previous_end = 0
 
-						#Grab the intergenic regions using similar method specified above in the if len(match) section
-						if begin != start:
-							pruned_file.write("%s:%d:%d\n" % (header,begin,start))
-							pruned_file.write("%s\n" % sequence[begin-1:start])
-							begin = end
-						else:
-							begin = end
-					if end != len(sequence):
-						pruned_file.write("%s:%d:%d\n" % (header,end,len(sequence)))
-						pruned_file.write("%s\n" % sequence[end:len(sequence)])
+					#Cycle through each match
+					for indicies in total_lines:
+						start = int(indicies[0])
+						end = int(indicies[1])
 
-			#If the scaffold isn't mentioned in the annotation file just write it out into the file
-			else:
-				pruned_file.write("%s:%d:%d\n" % (header,1,len(sequence)))
-				pruned_file.write("%s\n" % sequence)
-
+						#If the -300 region is within the scaffold bounds
+						# a.k.a that the gene doesn't start between 1-299
+						if (start-300) >= 1:
+							#If the position doesn't go into another gene the write whole region
+							if (start-300) > previous_end:
+								pruned_file.write("%s:%d:%d\n" % (header,start-300,start+50))
+								pruned_file.write("%s\n" % sequence[start-301:start+49])
+							#Else trucate the interfering positions
+							else:
+								if (start+50) > previous_end+1:
+									pruned_file.write("%s:%d:%d\n" % (header,previous_end+1,start+50))
+									pruned_file.write("%s\n" % sequence[previous_end+1:start+50])
+						previous_end = end
 		#Close both files
 		f.close()
 		pruned_file.close()
 		file_end = time.time()
-		print "Patient File ParsingTime: ", (file_end-file_start)
-	
+		print "Patient File Parsing Time: ", (file_end-file_start)
 
 #main 
 start = time.time()
 locations = preprocess_file(gene_prediction)
 end = time.time()
-print "File Parsing Time: ", (end-start)
+print "Annotation Parsing Time: ", (end-start)
 
 start = time.time()
 prune_files(locations)
