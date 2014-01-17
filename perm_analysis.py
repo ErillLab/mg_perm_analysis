@@ -27,6 +27,9 @@ from gpu_pssm import gpu_pssm
 
 def main():
     ##### Parameters #####
+    #Want to run with promoter regions
+    promoter = True
+    
     # Path to the MetaHit database.
     # The patient files can be downloaded from:
     #   http://www.bork.embl.de/~arumugam/Qin_et_al_2010/
@@ -35,7 +38,10 @@ def main():
     # disk!
     # The original paper can be found at:
     #   http://www.nature.com/nature/journal/v464/n7285/full/nature08821.html
-    metahit_path = "./MetaHit/Pruned"
+    if promoter:
+        metahit_path = "./MetaHit/Pruned"
+    else:
+        metahit_path = "./MetaHit/Data"
     
     # The collection of binding sites to generate the PSSM from.
     # LexA.seq.fa is a collection of 115 experimentally-determined binding
@@ -79,7 +85,11 @@ def main():
     ##########
     
     # Find patient files on disk
-    metahit_db = glob.glob(metahit_path + "/Pruned_MH[0-9]*.seq.fa")
+    if promoter:
+        metahit_db = glob.glob(metahit_path + "/Pruned_MH[0-9]*.seq.fa")
+    else:
+        metahit_db = glob.glob(metahit_path + "/MH[0-9]*.seq.fa")
+        
     if score_ecoli_instead:
         metahit_db = ["../NC_000913.fna"] # E. coli genome (for debugging)
     

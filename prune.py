@@ -17,8 +17,15 @@ import re, os, sys, time
 import numpy as np
 
 ### Global Settings ###
+#use Lab computer's path if at lab
+at_lab = True
+
 #Name of the file that holds the gene annotations
-gene_prediction = "../MetaGenome/BGI_GeneSet20090523_annotation"
+if at_lab:
+    gene_prediction = "MetaHit/BGI_GeneSet20090523_annotation"
+else:
+    gene_prediction = "../MetaGenome/BGI_GeneSet20090523_annotation"
+    
 #Regex pattern that matches the patient files
 filepattern = "MH[\d]+"
 #Regex pattern that matches the scaffold/contig lines in the annotation and patient files
@@ -115,8 +122,12 @@ def prune_files(gene_locations):
 
 	for file_name in sorted_file_list:
 		#Open both the patient file and the output file
-		f = open("../MetaGenome/Data/%s.seq.fa" % file_name, "r")
-		pruned_file = open("Pruned_%s.seq.fa" % file_name, "w")
+            if at_lab:
+                f = open("MetaHit/Data/%s.seq.fa" % file_name, "r")
+                pruned_file = open("Metahit/Pruned/Pruned_%s.seq.fa" % file_name, "w")
+            else:
+                f = open("../MetaGenome/Data/%s.seq.fa" % file_name, "r")
+                pruned_file = open("Pruned_%s.seq.fa" % file_name, "w")
 
 		#Keep user updated towards execution status
 		print "Starting: ", file_name
