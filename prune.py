@@ -9,8 +9,8 @@ Dependencies:
 
 Assumes:
 	 1. Files to be parsed are in lexicographic order.
-	 2. Ignores regions that overlap with each other
-	 3. Ignores regions that are at the begining of the scaffold/contig (if start: 1-299) 
+	 2. Ignores original strand regions that start at the very beginning of a sequence
+	 3. Ignores compliment strand regions that end of the very end of a sequence
 """
 
 import re, os, sys, time
@@ -22,11 +22,14 @@ gene_prediction = "../MetaGenome/BGI_GeneSet20090523_annotation"
 #Regex pattern that matches the patient files
 filepattern = "MH[\d]+"
 #Regex pattern that matches the scaffold/contig lines in the annotation and patient files
-gene_region_pattern = "((?:scaffold|c)[\d]+[^\d][\d]+):([\d]+):([\d]+)"
+gene_region_pattern = "((?:scaffold|c)[\d]+[^\d][\d]+):([\d]+):([\d]+):([+-])"
 #Regex pattern that matches the scaffold/contig label 
 scaffold_pattern  = "((?:scaffold|c)[\d]+[^\d][\d]+)"
 #Regex pattern that matches the start and stop regions
-region_pos_pattern = ":([\d]+):([\d]+)"
+region_pos_pattern = ":([\d]+):([\d]+):([+-])"
+#Grab the accession number from each line
+accession_number_pattern = "GL[\d]+"
+accession_number_pattern_object = re.compile(accession_number_pattern, re.IGNORECASE)
 #A set that holds the file listings to keep track of unique files
 file_list = set()
 
@@ -75,7 +78,8 @@ def preprocess_file(filename):
 			if match:
 				file_list.add(match.group(0))
 				line_match = gene_region_pattern_object.search(line)
-				gene_locations[index] = line_match.group(0)
+				accession_number_match = accession_number_pattern_object.search(line)
+				gene_locations[index] = accession_number_match.group(0) + ":" + line_match.group(0)
 				index += 1
 	
 	return gene_locations
@@ -123,7 +127,7 @@ def prune_files(gene_locations):
 			# Grab the first two lines of the patient file
 			header = f.readline().strip()
 			sequence = f.readline().strip()
-
+			sequence_len = len(sequence)
 			#If at the end of the file break out of while loop
 			if header == "" or sequence == "":
 				break
@@ -139,43 +143,42 @@ def prune_files(gene_locations):
 				while True:
 					if re.search(scaffold_match.group(0), gene_locations[annotation_index]):
 						region_pos_match = region_pos_pattern_object.search(gene_locations[annotation_index])
-						total_lines.append([region_pos_match.group(1), region_pos_match.group(2)])
+						accession_number_match = accession_number_pattern_object.search(gene_locations[annotation_index])
+						total_lines.append([accession_number_match.group(0), region_pos_match.group(1), region_pos_match.group(2), region_pos_match.group(3)])
 						annotation_index += 1
 					else:
 						break
-				#If only one line for a particular sequence
-				if len(total_lines) == 1:
-					start = int(total_lines[0][0])
-					end = int(total_lines[0][1])
 
-					# Get the promoter region
-					if (start-300) >= 1:
-						pruned_file.write("%s:%d:%d\n" % (header,start-300,start+50))
-						pruned_file.write("%s\n" % sequence[start-301:start+49])
+				#Cycle through each match
+				for indicies in total_lines:
+					number = indicies[0]
+					start = int(indicies[1])
+					end = int(indicies[2])
+					strand = indicies[3]
 
-				else:
-					#If there are more then one line
-					begin = 1
-					previous_end = 0
-
-					#Cycle through each match
-					for indicies in total_lines:
-						start = int(indicies[0])
-						end = int(indicies[1])
-
-						#If the -300 region is within the scaffold bounds
-						# a.k.a that the gene doesn't start between 1-299
-						if (start-300) >= 1:
-							#If the position doesn't go into another gene the write whole region
-							if (start-300) > previous_end:
-								pruned_file.write("%s:%d:%d\n" % (header,start-300,start+50))
-								pruned_file.write("%s\n" % sequence[start-301:start+49])
-							#Else trucate the interfering positions
+					#If the original strand
+					if strand == "+":
+						#If the gene region doesn't start at the beginning
+						if start != 1:
+							if (start - 300) < 0:
+								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,1,start+50, strand, number))
+								pruned_file.write("%s" % sequence[0:start+49])
 							else:
-								if (start+50) > previous_end+1:
-									pruned_file.write("%s:%d:%d\n" % (header,previous_end+1,start+50))
-									pruned_file.write("%s\n" % sequence[previous_end+1:start+50])
-						previous_end = end
+								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,start-300,start+50, strand, number))
+								pruned_file.write("%s" % sequence[start-301:start+50])
+
+					#The compliment strand
+					#start -> end | end-> start
+					else:
+						#If the beginning of the region isn't at the end of the sequence
+						if end != sequence_len:
+							if (end + 300) > sequence_len:
+								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,end-50,sequence_len, strand, number))
+								pruned_file.write("%s" % sequence[end-50:sequence_len])
+							else:
+								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,end-50,end+300, strand, number))
+								pruned_file.write("%s" % sequence[end-51:end+300])
+
 		#Close both files
 		f.close()
 		pruned_file.close()
