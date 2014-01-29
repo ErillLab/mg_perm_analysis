@@ -18,7 +18,7 @@ import numpy as np
 
 ### Global Settings ###
 #use Lab computer's path if at lab
-at_lab = True
+at_lab = False
 
 #Name of the file that holds the gene annotations
 if at_lab:
@@ -83,11 +83,14 @@ def preprocess_file(filename):
 
 			#if match is found insert entire line into list
 			if match:
-				file_list.add(match.group(0))
-				line_match = gene_region_pattern_object.search(line)
-				accession_number_match = accession_number_pattern_object.search(line)
-				gene_locations[index] = accession_number_match.group(0) + ":" + line_match.group(0)
-				index += 1
+				# This file and the annotation are out of synch scaffold wise 
+				# to avoid a major headache I am excluding this file.
+				if match.group(0) != "MH0006":
+					file_list.add(match.group(0))
+					line_match = gene_region_pattern_object.search(line)
+					accession_number_match = accession_number_pattern_object.search(line)
+					gene_locations[index] = accession_number_match.group(0) + ":" + line_match.group(0)
+					index += 1
 	
 	return gene_locations
 
@@ -169,26 +172,17 @@ def prune_files(gene_locations):
 
 					#If the original strand
 					if strand == "+":
-						#If the gene region doesn't start at the beginning
-						if start != 1:
-							if (start - 300) < 0:
-								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,1,start+50, strand, number))
-								pruned_file.write("%s" % sequence[0:start+49])
-							else:
-								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,start-300,start+50, strand, number))
-								pruned_file.write("%s" % sequence[start-301:start+50])
+						if start - 300 >= 1:
+							pruned_file.write("%s:%d:%d:%s:%s\n" % (header,start-300,start+50, strand, number))
+							pruned_file.write("%s\n" % sequence[start-300:start+51])
 
 					#The compliment strand
 					#start -> end | end-> start
 					else:
-						#If the beginning of the region isn't at the end of the sequence
-						if end != sequence_len:
-							if (end + 300) > sequence_len:
-								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,end-50,sequence_len, strand, number))
-								pruned_file.write("%s" % sequence[end-50:sequence_len])
-							else:
-								pruned_file.write("\n%s:%d:%d:%s:%s\n" % (header,end-50,end+300, strand, number))
-								pruned_file.write("%s" % sequence[end-51:end+300])
+						if end+301 <= len(sequence):
+							pruned_file.write("%s:%d:%d:%s:%s\n" % (header,end-50,end+300, strand, number))
+							pruned_file.write("%s\n" % sequence[end-50:end+301])
+
 
 		#Close both files
 		f.close()
