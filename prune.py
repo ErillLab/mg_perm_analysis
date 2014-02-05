@@ -18,7 +18,7 @@ import numpy as np
 
 ### Global Settings ###
 #use Lab computer's path if at lab
-at_lab = False
+at_lab = True
 
 #Name of the file that holds the gene annotations
 if at_lab:

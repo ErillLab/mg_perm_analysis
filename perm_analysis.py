@@ -3,6 +3,7 @@
 Created on Sun Nov 24 00:50:44 2013
 
 @author: Talmo
+@editor: David  
 
 This script does a permutation analysis on the scores of the LexA binding motif
 in the MetaHit database in order to support the findings in Cornish et al.
@@ -19,6 +20,7 @@ import os.path
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 import metagenomics as mg
 # Import gpu_pssm from the parent directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
@@ -46,7 +48,9 @@ def main():
     # The collection of binding sites to generate the PSSM from.
     # LexA.seq.fa is a collection of 115 experimentally-determined binding
     # sites reported in literature. See Table S1 in Cornish et al. (2013).
-    binding_sites_path = "./LexA.seq.fa"
+   # binding_sites_path = "./LexA.seq.fa"
+    #binding_sites_path= "./LexA_Gamma_collection.fas"
+    binding_sites_path = "./LexA_Grampos_collection.fas"
     
     # Number of permutations to run. Note that the COLUMNS of the PSSM
     permutations = 50
@@ -81,7 +85,7 @@ def main():
     # The genome sequence can be download from:
     #  ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria/Escherichia_coli_K_12_substr__MG1655_uid57779/
     # Use this for comparison/debugging.
-    score_ecoli_instead = False
+    score_ecoli_instead = False			
     ##########
     
     # Find patient files on disk
@@ -89,13 +93,20 @@ def main():
         metahit_db = glob.glob(metahit_path + "/Pruned_MH[0-9]*.seq.fa")
     else:
         metahit_db = glob.glob(metahit_path + "/MH[0-9]*.seq.fa")
-        
+       #  metahit_db = ["Eco_300_1_50_P.txt"]
+         
     if score_ecoli_instead:
         metahit_db = ["../NC_000913.fna"] # E. coli genome (for debugging)
     
+    # gather total time
+    start = time.time()
+				
     # For debugging, truncate to just first patient
-    metahit_db = [metahit_db[0]]
-    
+    # An alert just incase I am clumsy and forget these lines are uncommented.
+    #print "USING ONLY ONE PATIENT!!"
+    #metahit_db = ["Eco_300_1_50_P.txt"]
+    #metahit_db = [metahit_db[0]]
+				
     for patient_file in metahit_db:
         # Load the sequence into memory
         metagenome, scaffolds = mg.load_scaffolds(patient_file)
@@ -110,7 +121,7 @@ def main():
         
         # Calculate the original PSSM from binding sites
         original_pssm = gpu_pssm.create_pssm(binding_sites_path, genome_frequencies = mg_frequencies)
-
+        
         # Print the unpermuted PSSM        
         print "Unpermuted PSSM:"
         mg.print_pssm(original_pssm)
@@ -133,7 +144,7 @@ def main():
             
             # Save the distribution of the scores
             patient_scores.append(perm_scores)
- 
+
     # Plot results
     plt.figure()
     for score in patient_scores[1:]:
@@ -159,22 +170,34 @@ def main():
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
 
-    print "Statistics:"
-    print "Orginal: "
-    print "Avg: " % (np.mean(patient_scores[0]))
-    print "Median: " % (np.median(patient_scores[0]))
-    print "Std: " % (np.std(patient_scores[0]))
-    print 
+   # print "Statistics:"
+   # print "Orginal: "
+   # print "Avg: %.2f" % (np.mean(patient_scores[0]))
+   # print "Median: %.2f" % (np.median(patient_scores[0]))
+   # print "Std: %.2f" % (np.std(patient_scores[0]))
+   # print 
     
-    iteration = 1
-    for score in patient_scores[1:]:
-        print "Permutation %d" % iteration
-        print "Avg: " % (np.mean(score))
-        print "Median: " % (np.median(score))
-        print "Std: " % (np.std(score))
-        print 
-        iteration += 1
-        
+   # iteration = 1
+   # for score in patient_scores[1:]:
+   #     print "Permutation %d" % iteration
+   #     print "Avg: %.2f" % (np.mean(score))
+   #     print "Median: %.2f" % (np.median(score))
+   #     print "Std: %.2f" % (np.std(score))
+   #     print 
+   #     iteration += 1
+    
+    total_fake_patient_scores = patient_scores[1]
+    for score in patient_scores[2:]:
+	total_fake_patient_scores += score
+    total_fake_patient_scores = np.vectorize(lambda x: x if x > 0 else .000001)(np.float64(total_fake_patient_scores))
+    permutation_factor= np.float64(patient_scores[0]*permutations)/total_fake_patient_scores
+    print "Baysian Factor Test at 20 bits:"
+    print "Numerator: %d"  % (patient_scores[0][69]*permutations)
+    print "Denomiator %d" % (total_fake_patient_scores[69])
+    print "Baysian Factor %.2f" % permutation_factor[69]
+    end = time.time()
+    print "Total time: %.2f seconds" % (end-start)		
+				
 def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
     # Score the metagenome with the new PSSM
     scores = gpu_pssm.score_long_sequence(metagenome, pssm, keep_strands=False)
