@@ -27,6 +27,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.
 from gpu_pssm import gpu_pssm
 
 def main():
+    
     ##### Parameters #####
     #Want to run with promoter regions
     promoter = True
@@ -47,7 +48,7 @@ def main():
     # The collection of binding sites to generate the PSSM from.
     # LexA.seq.fa is a collection of 115 experimentally-determined binding
     # sites reported in literature. See Table S1 in Cornish et al. (2013).
-   # binding_sites_path = "./LexA.seq.fa"
+    # binding_sites_path = "./LexA.seq.fa"
     #binding_sites_path= "./LexA_Gamma_collection.fas"
     binding_sites_path = "./LexA_Grampos_collection.fas"
     
@@ -85,10 +86,13 @@ def main():
     #  ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria/Escherichia_coli_K_12_substr__MG1655_uid57779/
     # Use this for comparison/debugging.
     score_ecoli_instead = False			
-    ##########
     
+    #Calculate the total number of sites, scaffolds scanned
     total_num_sites = 0
-    
+    total_size = 0
+    total_scaffold = 0
+    ##########
+
     # Find patient files on disk
     if promoter:
         metahit_db = glob.glob(metahit_path + "/Pruned_MH[0-9]*.seq.fa")
@@ -107,44 +111,61 @@ def main():
     #print "USING ONLY ONE PATIENT!!"
     #metahit_db = ["Eco_300_1_50_P.txt"]
     #metahit_db = [metahit_db[0]]
-				
+    # Assume equiprobable mononucleotide frequencies
+    mg_frequencies = [0.25] * 4
+        
+    if not equiprobable_nuc_freqs:
+        # Calculate the background nucleotide frequency for the metagenome
+        mg_frequencies = np.bincount(metagenome).astype(np.float) / metagenome.size
+        
+    # Calculate the original PSSM from binding sites
+    original_pssm = gpu_pssm.create_pssm(binding_sites_path, genome_frequencies = mg_frequencies)
+        
+    # Print the unpermuted PSSM        
+    print "Unpermuted PSSM:"
+    mg.print_pssm(original_pssm)
+
+    #preallocate the array to speed up process
+    permute_pssm = np.empty(shape(permutations+1,len(original_pssm), dtype=object))
+    patient_scores = np.zeros(shape=(permutations+1,len(bins)))
+	
+    #calculate predetermined pssm
+    for permutation in range(permutations):	
+       
+        # Permute the PSSM
+        permute_pssm[permutation] = mg.permute_pssm(original_pssm)
+
+    #Cycle through every patient file
     for patient_file in metahit_db:
+
+        #Status Update
+        print "File: ", patient_file
+
         # Load the sequence into memory
         metagenome, scaffolds = mg.load_scaffolds(patient_file)
+        total_size += metagenome.size
+        total_scaffold += scaffolds.size
         print "Genome size:", metagenome.size, "| Scaffolds:", scaffolds.size
-        # Assume equiprobable mononucleotide frequencies
-        mg_frequencies = [0.25] * 4
-        
-        if not equiprobable_nuc_freqs:
-            # Calculate the background nucleotide frequency for the metagenome
-            mg_frequencies = np.bincount(metagenome).astype(np.float) / metagenome.size
-        
-        # Calculate the original PSSM from binding sites
-        original_pssm = gpu_pssm.create_pssm(binding_sites_path, genome_frequencies = mg_frequencies)
-        
-        # Print the unpermuted PSSM        
-        print "Unpermuted PSSM:"
-        mg.print_pssm(original_pssm)
-        
+           
         # Score the metagenome using the original PSSM
         print "Scoring without permuting..."
         original_scores,partial_num_sites = score_patient(metagenome, scaffolds, original_pssm, score_threshold, bins)
 
         # Keep the distributions of the scores
-        patient_scores = [original_scores]
+        patient_scores[0]+= original_scores
         total_num_sites += partial_num_sites
 
+        #For each permutated pssm
         for permutation in range(permutations):
-            print "Permutation %d/%d..." % (permutation + 1, permutations)
-            # Permute the PSSM
-            pssm = mg.permute_pssm(original_pssm)
-            
+
+            #which permutation it is on
+            print "Permutation %d/%d..." % (permutation + 1, permutations)            
             
             # Re-score using permuted PSSM
-            perm_scores,partial_num_sites = score_patient(metagenome, scaffolds, pssm, score_threshold, bins)            
+            perm_scores,partial_num_sites = score_patient(metagenome, scaffolds, permute_pssm[permutation], score_threshold, bins)            
             
             # Save the distribution of the scores
-            patient_scores.append(perm_scores)
+            patient_scores[permutation+1] += perm_scores
 
     # Plot results
     plt.figure()
@@ -171,25 +192,34 @@ def main():
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
 
+    #Calculate p-values
     total_fake_patient_scores = patient_scores[1]
     for score in patient_scores[2:]:
-	total_fake_patient_scores += score
+	   total_fake_patient_scores += score
     total_fake_patient_scores = np.vectorize(lambda x: x if x > 0 else .000001)(np.float64(total_fake_patient_scores))
 
     print
     real_prob = np.float64(patient_scores[0])/total_num_sites
     fake_prob = total_fake_patient_scores/(total_num_sites * permutations)
+
+    #print out the p-values
     print "Probability (True Matrix | Score):"
     matrix_prob = (real_prob/(fake_prob+real_prob)) * 100
     print "\n".join("%d:%.2f" % (s, p) for s, p in zip(bins,matrix_prob))
+
+    #Plot the Probability Values
     plt.figure()
     plt.bar(bins[1:],matrix_prob)
     plt.xlabel("Site score (bits)")
     plt.ylabel("Confidence Level (%)")
     plt.grid()
+    
+    #final diagnostics
     end = time.time()
     print "Total time: %.2f seconds" % (end-start)	
-																
+	print "Total Metagenome Size: %d bp" % (total_size)
+    print "Total Scaffolds Scanned: %d" % (total_scaffold)	
+
 def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
     # Score the metagenome with the new PSSM
     scores = gpu_pssm.score_long_sequence(metagenome, pssm, keep_strands=False)
