@@ -392,7 +392,7 @@ def rev_pssm(pssm):
     _pssm = pssm    
     if len(pssm.shape) == 2:
         _pssm = _pssm.flatten()
-    
+
     # Get the reverse-complement
     _rev_pssm = np.array([_pssm[i / 4 + (3 - (i % 4))] for i in range(_pssm.size)][::-1])
     return _rev_pssm

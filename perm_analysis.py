@@ -26,7 +26,6 @@ import metagenomics as mg
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from gpu_pssm import gpu_pssm
 
-
 def main():
     ##### Parameters #####
     #Want to run with promoter regions
@@ -88,6 +87,8 @@ def main():
     score_ecoli_instead = False			
     ##########
     
+    total_num_sites = 0
+    
     # Find patient files on disk
     if promoter:
         metahit_db = glob.glob(metahit_path + "/Pruned_MH[0-9]*.seq.fa")
@@ -111,7 +112,6 @@ def main():
         # Load the sequence into memory
         metagenome, scaffolds = mg.load_scaffolds(patient_file)
         print "Genome size:", metagenome.size, "| Scaffolds:", scaffolds.size
-        
         # Assume equiprobable mononucleotide frequencies
         mg_frequencies = [0.25] * 4
         
@@ -128,11 +128,12 @@ def main():
         
         # Score the metagenome using the original PSSM
         print "Scoring without permuting..."
-        original_scores = score_patient(metagenome, scaffolds, original_pssm, score_threshold, bins)
-        
+        original_scores,partial_num_sites = score_patient(metagenome, scaffolds, original_pssm, score_threshold, bins)
+
         # Keep the distributions of the scores
         patient_scores = [original_scores]
-                
+        total_num_sites += partial_num_sites
+
         for permutation in range(permutations):
             print "Permutation %d/%d..." % (permutation + 1, permutations)
             # Permute the PSSM
@@ -140,7 +141,7 @@ def main():
             
             
             # Re-score using permuted PSSM
-            perm_scores = score_patient(metagenome, scaffolds, pssm, score_threshold, bins)            
+            perm_scores,partial_num_sites = score_patient(metagenome, scaffolds, pssm, score_threshold, bins)            
             
             # Save the distribution of the scores
             patient_scores.append(perm_scores)
@@ -170,34 +171,25 @@ def main():
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
 
-   # print "Statistics:"
-   # print "Orginal: "
-   # print "Avg: %.2f" % (np.mean(patient_scores[0]))
-   # print "Median: %.2f" % (np.median(patient_scores[0]))
-   # print "Std: %.2f" % (np.std(patient_scores[0]))
-   # print 
-    
-   # iteration = 1
-   # for score in patient_scores[1:]:
-   #     print "Permutation %d" % iteration
-   #     print "Avg: %.2f" % (np.mean(score))
-   #     print "Median: %.2f" % (np.median(score))
-   #     print "Std: %.2f" % (np.std(score))
-   #     print 
-   #     iteration += 1
-    
     total_fake_patient_scores = patient_scores[1]
     for score in patient_scores[2:]:
 	total_fake_patient_scores += score
     total_fake_patient_scores = np.vectorize(lambda x: x if x > 0 else .000001)(np.float64(total_fake_patient_scores))
-    permutation_factor= np.float64(patient_scores[0]*permutations)/total_fake_patient_scores
-    print "Baysian Factor Test at 20 bits:"
-    print "Numerator: %d"  % (patient_scores[0][69]*permutations)
-    print "Denomiator %d" % (total_fake_patient_scores[69])
-    print "Baysian Factor %.2f" % permutation_factor[69]
+
+    print
+    real_prob = np.float64(patient_scores[0])/total_num_sites
+    fake_prob = total_fake_patient_scores/(total_num_sites * permutations)
+    print "Probability (True Matrix | Score):"
+    matrix_prob = (real_prob/(fake_prob+real_prob)) * 100
+    print "\n".join("%d:%.2f" % (s, p) for s, p in zip(bins,matrix_prob))
+    plt.figure()
+    plt.bar(bins[1:],matrix_prob)
+    plt.xlabel("Site score (bits)")
+    plt.ylabel("Confidence Level (%)")
+    plt.grid()
     end = time.time()
-    print "Total time: %.2f seconds" % (end-start)		
-				
+    print "Total time: %.2f seconds" % (end-start)	
+																
 def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
     # Score the metagenome with the new PSSM
     scores = gpu_pssm.score_long_sequence(metagenome, pssm, keep_strands=False)
@@ -208,9 +200,10 @@ def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
         if pos - (pssm.size / 4) + 1 > 0:
             scores[pos - (pssm.size / 4) + 1:pos] = -np.inf
 
+    partial_num_sites = len(np.where(scores > -np.inf)[0])
     # Eliminate scores below threshold
     high_scores = np.where(scores >= score_threshold)
-    #print np.where(scores >= score_threshold)
+    #print np.where(scores >= score_threshold)l
     #print scores.size
     #print len(scaffolds)
     print "Scores >= 20 bits:", len(np.where(scores >= 20)[0])
@@ -220,7 +213,7 @@ def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
     # Bin the scores
     score_hist, __ = np.histogram(scores, bins, density=False)
     
-    return score_hist
+    return (score_hist, partial_num_sites)
 
 if __name__ == "__main__":
     main()
