@@ -126,8 +126,8 @@ def main():
     mg.print_pssm(original_pssm)
 
     #preallocate the array to speed up process
-    permute_pssm = np.empty(shape(permutations+1,len(original_pssm), dtype=object))
-    patient_scores = np.zeros(shape=(permutations+1,len(bins)))
+    permute_pssm = np.empty(shape=(permutations+1,len(original_pssm)), dtype=object)
+    patient_scores = np.zeros(shape=(permutations+1,len(bins)-1))
 	
     #calculate predetermined pssm
     for permutation in range(permutations):	
@@ -176,7 +176,8 @@ def main():
     cdf = np.cumsum(patient_scores[0])
     plt.plot(bins[1:], cdf, "D-b", lw=3, label="Original")
     plt.xlabel("Site score (bits)")
-    plt.ylabel("Cumulative distribution")
+    plt.ylabel("# of Sites Found")
+    plt.title("Cumulative Density Function")
     handles, labels = plt.gca().get_legend_handles_labels()
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
@@ -187,7 +188,8 @@ def main():
         plt.plot(bins[1:], score, "D-r", alpha=0.5, label="Permutation")
     plt.plot(bins[1:], patient_scores[0], 'D-b', lw=3, label="Original")
     plt.xlabel("Site score (bits)")
-    plt.ylabel("Probability distribution function")
+    plt.ylabel("# of Sites Found ")
+    plt.title("Probability Density Function")
     handles, labels = plt.gca().get_legend_handles_labels()
     plt.legend(handles[-2:], labels[-2:], loc="best")
     plt.grid()
@@ -217,7 +219,7 @@ def main():
     #final diagnostics
     end = time.time()
     print "Total time: %.2f seconds" % (end-start)	
-	print "Total Metagenome Size: %d bp" % (total_size)
+    print "Total Metagenome Size: %d bp" % (total_size)
     print "Total Scaffolds Scanned: %d" % (total_scaffold)	
 
 def score_patient(metagenome, scaffolds, pssm, score_threshold, bins):
