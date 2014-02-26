@@ -3,3 +3,9 @@
 
 # Ignore compiled python files
 *.py[cod]
+
+#Ignore Fasta Files
+*.fa[s]
+
+#Ignore txt
+*.txt
