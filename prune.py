@@ -1,202 +1,219 @@
 """
-@author: David 
+Created February 19,2014
 
-This script parses the BGI_GeneSet20090523_annotation file and grabs the intergenic regions
-from patient files. 
-
-Dependencies:
-	- Numpy
-
-Assumes:
-	 1. Files to be parsed are in lexicographic order.
-	 2. Ignores original strand regions that start at the very beginning of a sequence
-	 3. Ignores compliment strand regions that end of the very end of a sequence
+@author David Nicholson
 """
-
 import re, os, sys, time
 import numpy as np
 
-### Global Settings ###
-#use Lab computer's path if at lab
-at_lab = True
-
-#Name of the file that holds the gene annotations
-if at_lab:
-    gene_prediction = "MetaHit/BGI_GeneSet20090523_annotation"
-else:
-    gene_prediction = "../MetaGenome/BGI_GeneSet20090523_annotation"
-    
-#Regex pattern that matches the patient files
-filepattern = "MH[\d]+"
-#Regex pattern that matches the scaffold/contig lines in the annotation and patient files
-gene_region_pattern = "((?:scaffold|c)[\d]+[^\d][\d]+):([\d]+):([\d]+):([+-])"
-#Regex pattern that matches the scaffold/contig label 
-scaffold_pattern  = "((?:scaffold|c)[\d]+[^\d][\d]+)"
-#Regex pattern that matches the start and stop regions
-region_pos_pattern = ":([\d]+):([\d]+):([+-])"
-#Grab the accession number from each line
-accession_number_pattern = "GL[\d]+"
-accession_number_pattern_object = re.compile(accession_number_pattern, re.IGNORECASE)
-#A set that holds the file listings to keep track of unique files
-file_list = set()
-
-### Methods ###
-
-def preprocess_file(filename):
+def load_annotations(filename, pattern, filetype= "FASTA"):
 	"""
+	This function will parse a gene annotation file.
+	The parse data will be in the format: [scaffold,source,start, end, strand, accession#]
 
-	Loads the gene annotation data into memory.
-
-	Typical line in the annotation file:
-	GL0017522_MH0001_[Lack_5'-end]_[mRNA]_locus=scaffold14_9:2:700:+	COG0850	K03610
-
-	The patterns specified in the global variable section will match the MH#### part of the line:
-	GL0017522_(MH0001)_[Lack_5'-end]_[mRNA]_locus=scaffold14_9:2:700:+	COG0850	K03610
-	Then it will add the entire line into the array to be parsed by the prune_files method below.
+	The function will require a passed in regular expression.
+	A tutorial for beginners to regular expressions: http://www.regular-expressions.info/tutorial.html
+	To get a more pratical feel for regular-expressions (requires java): http://regex.powertoy.org/
+	Python's Regular Expression: http://docs.python.org/2/howto/regex.html
 	
-	Args:
-		filename: The file path towards the gene annotation file.
+	Each passed in pattern needs to use the symbolic grouping method. (?P<name>...)
+	This allows for groupdict function to be called and guarentees that the annotation array will contain
+	all necessary information.
 
-	Returns:
-		Returns an array that holds all the relevant lines from the annotation file. 
-		It only holds lines that match with the pattern mentioned above. 
 
-	"""
-	
-	#Compile the pattern to decrease the time it takes to search
-	file_pattern_object = re.compile(filepattern)
-	gene_region_pattern_object = re.compile(gene_region_pattern, re.IGNORECASE)
-
-	with open(filename) as g:
-		#Trick borrowed from Talmo
-		#Preallocates array based on the number of lines in the file
-		g.seek(0,os.SEEK_END)
-		pos = g.tell()
-		gene_locations = np.empty(pos, dtype="S128")
-		g.seek(0,os.SEEK_SET)
-		index = 0
-
-		#process the lines in the file
-		for line in g:
-			#Attempts to match each line with the regex pattern MH[\d]+
-			match = file_pattern_object.search(line)
-
-			#if match is found insert entire line into list
-			if match:
-				# This file and the annotation are out of synch scaffold wise 
-				# to avoid a major headache I am excluding this file.
-				if match.group(0) != "MH0006":
-					file_list.add(match.group(0))
-					line_match = gene_region_pattern_object.search(line)
-					accession_number_match = accession_number_pattern_object.search(line)
-					gene_locations[index] = accession_number_match.group(0) + ":" + line_match.group(0)
-					index += 1
-	
-	return gene_locations
-
-def prune_files(gene_locations):
-	"""
-	Finds the intergenic regions and writes a new file containing the regions
-	Each file will hold as output:
-		> <scaffold name>:<the start of the intergenic region>:<the end of the intergenic region>
-
-	Example:
-		>scaffold1_2_MH0001:1:692
-		CACGTCGTCAGGAAGCTGACCCAGCTCGTGGTTGGCCTCGGCAGCAGCGAGCTTCACGTATGCAA
-		TGGCCTTGACATACTCGGGATAGTCGCACATGTGCTTGCCCGAAATCTTGTAATTGTTGATG
-		GCGCGCTGTGTCTGCACACCATAGTAAGCCTCGGCGGGTACCTGGAGCTCACCCAAGAGGTCGCT...
-		
-	Args: 
-		gene_locations: An array that holds the lines from the annotation file
+	Arguments:
+		filename: name of the gene annotation file
+		pattern: a regex pattern to search files
+		filetype: specifies how the annotation file is formatted
 
 	Return:
-		This method doesn't return anything; however, this method will write out files
-		that are titled: Pruned_<Patient File>.seq.fa.
+		annotations: a 2d array that contains essential data
+			Ex. [[scaffold,source, start, end, strand, accession#],[scaffold, source, start, end, strand, accession#]]
 
+	Example:
+		>>> annotations = load_annotations("GENE FILE.fa", "FASTA", "(?P<scaffold>scaffold):(?P<source>MH[\d]+):(?<start>[\d]+):(?<end>[\d]+):(?<strand>[+|-]):(?<accession>accession)")
+		>>> annotations
+			[["scaffold01", "MH001", "1", "100", "+", "accession"], ["scaffold02", "MH001", "300", "900", "-","accession"]] ...]
 	"""
+	#compile the regular expression to speed up search process
+	pattern_object = re.compile(pattern)
 
-	#Convert set into list and sort it to match with global array
-	sorted_file_list = sorted(list(file_list))
-	annotation_index = 0
+	#For now one type of format: FASTA. Expecting to add code to parse other file formats
+	if filetype == "FASTA":
+		#open file
+		with open(filename, "r") as g:
+			#pre allocate array to hold [scaffold, start, end, strand, accession #]
+			g.seek(0,os.SEEK_END)
+			pos = g.tell()
+			gene_locations = np.empty(shape=(pos,1),dtype=object)
+			g.seek(0,os.SEEK_SET)
+			index = 0
 
-	#Scaffold pattern to match 
-	scaffold_pattern_object = re.compile(scaffold_pattern, re.IGNORECASE)
-	region_pos_pattern_object = re.compile(region_pos_pattern)
+			#run through line by line of the annotation file
+			for line in g:
 
-	for file_name in sorted_file_list:
-		#Open both the patient file and the output file
-            if at_lab:
-                f = open("MetaHit/Data/%s.seq.fa" % file_name, "r")
-                pruned_file = open("Metahit/Pruned/Pruned_%s.seq.fa" % file_name, "w")
-            else:
-                f = open("../MetaGenome/Data/%s.seq.fa" % file_name, "r")
-                pruned_file = open("Pruned_%s.seq.fa" % file_name, "w")
+				#Regex match to gather essential data 
+				match = pattern_object.search(line)
 
-		#Keep user updated towards execution status
-		print "Starting: ", file_name
-		file_start = time.time()
+				#ignore lines other than gene annotation lines
+				if match and "MH0006" not in line:
+					#insert essential data into the array
+					terms = match.groupdict()
+					gene_locations[index] = [checkStrand(terms)]
+					#gene_locations[index] = [[terms['scaffold'], terms['source'], terms['start'], terms['end'], terms['strand'], terms['accession']]]
+					index += 1
+		return gene_locations
 
-		#Python's ghetto do-while 
-		while True:
-			# Grab the first two lines of the patient file
-			header = f.readline().strip()
-			sequence = f.readline().strip()
-			sequence_len = len(sequence)
-			#If at the end of the file break out of while loop
-			if header == "" or sequence == "":
-				break
+def checkStrand(entries):
+	"""
+	This function checks to see if it can find all the necessary information within an annotation line.
+	If it can find information it will attempt to add information where appropiate.
+	
+	Hopefully an entry will contain a dictionary in the following format:
+		{"scaffold": "scaffold14_9, "source":"MH0006", "start":"300", "end":"500", "strand":"+", "accession":"GL50000"}
 
-			total_lines = list()
-			scaffold_match = scaffold_pattern_object.search(header)
+	Arguments:
+		a line from a gene annotation file in dictionary format
+	
+	Return:
+		an array of all the essential data in a specified order
 
-			#If the annotation line has scaffold###_####
-			if re.search(scaffold_match.group(0),gene_locations[annotation_index]):
+	Example:
+		>>>> entry = checkStrand({"scaffold": "scaffold14_9", "source":"MH0006", "start":"300", "end":"500", "strand":"+", "accession":"GL50000"})
+		>>>> entry
+			["scaffold14_9", "MH0006", "300", "500" , "+", "GL50000"]
+	"""
+	#if the gene is missing an accession number
+	missing_accession = False
+	missing_terms = []
 
-				#Annotation file can hold locations on the same scaffold
-				#Grab all relevant lines
-				while True:
-					if re.search(scaffold_match.group(0), gene_locations[annotation_index]):
-						region_pos_match = region_pos_pattern_object.search(gene_locations[annotation_index])
-						accession_number_match = accession_number_pattern_object.search(gene_locations[annotation_index])
-						total_lines.append([accession_number_match.group(0), region_pos_match.group(1), region_pos_match.group(2), region_pos_match.group(3)])
-						annotation_index += 1
-					else:
-						break
+	#gather necessary key information
+	keys = ["scaffold", "source", "start", "end", "strand", "accession"]
+	for key in keys:
+		if key not in entries:
+			missing_terms.append(key)
 
-				#Cycle through each match
-				for indicies in total_lines:
-					number = indicies[0]
-					start = int(indicies[1])
-					end = int(indicies[2])
-					strand = indicies[3]
+	#check list of terms to see what is missing and appropiately
+	if "accession" in missing_terms:
+		missing_accession = True
 
-					#If the original strand
-					if strand == "+":
-						if start - 300 >= 1:
-							pruned_file.write("%s:%d:%d:%s:%s\n" % (header,start-300,start+50, strand, number))
-							pruned_file.write("%s\n" % sequence[start-300:start+51])
+	if "scaffold" in  missing_terms or "source" in missing_terms:
+		print "Please make sure to have the necessary information:"
+		print missing_terms
+		sys.exit(1)
 
-					#The compliment strand
-					#start -> end | end-> start
-					else:
-						if end+301 <= len(sequence):
-							pruned_file.write("%s:%d:%d:%s:%s\n" % (header,end-50,end+300, strand, number))
-							pruned_file.write("%s\n" % sequence[end-50:end+301])
+	if "strand" in missing_terms:
+		start = int(entries['start'])
+		end = int(entries['end'])
+		if start < end:
+			if missing_accession:
+				return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+"]
+			else:
+				return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+", entries[keys[5]]]
+		else:
+			if missing_accession:
+				return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-"]
+			else:
+				return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-", entries[keys[5]]]
+	else:
+		if missing_accession:
+			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]]]
+		else:
+			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]], entries[keys[5]]]
 
+def parse_files(annotations,filenames, upstream = 300, downstream = 50):
+	"""
+	This function parses out the non-coding regions of the metagenome files. 
+	The ouput is a pruned file that contains a fasta file with the regions.
 
-		#Close both files
-		f.close()
-		pruned_file.close()
-		file_end = time.time()
-		print "Patient File Parsing Time: ", (file_end-file_start)
+	The file will contain:
+		>scaffold|source of the metagenome|start position|end position|strand|accession number
+		ATGCACACACAGTCTTTTTGGGGGGGGGGCTTTAAACAGTACGTAGGAGGGAGATTAGTCA
 
-#main 
-start = time.time()
-locations = preprocess_file(gene_prediction)
-end = time.time()
-print "Annotation Parsing Time: ", (end-start)
+	Arguments:
+		annotations: a parsed array for the gene annotations
+		filenames: the names of the files to be read in
+		upstream: an optional variable to specify the number of desired base pairs upstream from the start codon
+		downstream: an optional variable to specify the number of desired base pairs down stream from the start codon
 
-start = time.time()
-prune_files(locations)
-end = time.time()
-print "Total Process Time: ", (end-start)
+	Returns:
+		A newly created file with the non-coding regions. 
+
+	Ex.
+		>>>parse_files([["scaffold01", "MH001", "1", "100", "+", "accession"], ...], ["MH0001.seq.fa",...])
+		>>> 
+			*No output above^. A file should be generated in the same directory as this file.*
+	"""
+	index = 0
+
+	#run through the avaiable metagenome files
+	for metagenome_file in filenames:
+
+		#grab name of file
+		metagenome_file_header = os.path.splitext(os.path.splitext(os.path.basename(metagenome_file))[0])[0]
+
+		#Update user about the progress
+		print "Working on: ", metagenome_file_header
+		start_time = time.time()
+
+		#shortcut to get list of annotations that pertain to the specified file
+		#not really a short cut need to figure out a better way to do this...
+		#sub_annotations = [item for item in [annotation for annotation in annotations] if metagenome_file_header in item]
+		
+		#open file for writing
+		g = open("Pruned_%s.fa" % metagenome_file_header, "w")
+
+		with open(metagenome_file, "r") as f:
+
+			while True:
+				line = f.readline().strip()
+				seq = f.readline().strip()
+				#print "line inside the file: ", line
+				if line == "" or seq == "":
+					break
+
+				annotation_line = []
+				#search for the header in the array of annotations
+				#annotation_line = filter(lambda x: x if "%s_%s" % (x[0], x[1]) in line else None, sub_annotations)
+				#annotation_line = [x for x in sub_annotations if "%s_%s" % (x[0], x[1]) in line]
+				while("%s_%s" % (annotations[index][0][0],annotations[index][0][1]) in line):
+					annotation_line.append(annotations[index][0])
+					index = index + 1
+
+				#use array index just like prev program
+				#if found:
+				if len(annotation_line) > 0:
+					#go through the annotated array
+					for extract in annotation_line:
+						#grab the start and the stop positions of the annotated entries
+						start = int(extract[2])
+						end = int(extract[3])
+
+						#if the original strand
+						if extract[4] == "+":
+							if start - upstream >= 0:
+								#verify that the written sequence is equal to the specified bounds (up,down)stream
+								assert (upstream+downstream) == len(seq[start-upstream:start+downstream]), "%s\n%s" % (line,seq)
+
+								#write out custom format for output
+								extract[2] = str(start-upstream)
+								extract[3] = str(start+downstream)
+								g.write(">%s\n" % ("|".join(extract)))
+								g.write("%s\n" % (seq[start-upstream:start+downstream]))
+
+						#The reverse compliment strand
+						else:
+							if end + upstream <= len(seq):
+								#verify that the written sequence is equal to the specified bounds (up,down)stream
+								assert (upstream+downstream) == len(seq[end-downstream:upstream+end]), "%s\n%s" % (line,seq)
+
+								#write out custom format for output
+								extract[2] = str(end-downstream)
+								extract[3] = str(end+upstream)
+								g.write(">%s\n" %("|". join(extract)))
+								g.write("%s\n" % seq[end-downstream:upstream+end])
+
+		#Diagnositics for the User
+		end_time = time.time()
+		g.close()
+		print "Time Taken: ", (end_time-start_time)
