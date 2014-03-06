@@ -84,42 +84,77 @@ def checkStrand(entries):
 			["scaffold14_9", "MH0006", "300", "500" , "+", "GL50000"]
 	"""
 	#if the gene is missing an accession number
-	missing_accession = False
+	#missing_accession = False
 	missing_terms = []
+	important_missing_terms = []
+	return_list = []
 
 	#gather necessary key information
 	keys = ["scaffold", "source", "start", "end", "strand", "accession"]
 	for key in keys:
 		if key not in entries:
+			#if the program doesn't have information: scaffold, start, end it needs to break
+			if key != "source" and key != "accession" and key != "strand":
+				important_missing_terms.append(key)
 			missing_terms.append(key)
 
 	#check list of terms to see what is missing and appropiately
-	if "accession" in missing_terms:
-		missing_accession = True
+	#if "accession" in missing_terms:
+	#	missing_accession = True
 
-	if "scaffold" in  missing_terms or "source" in missing_terms:
+	#if missing important information break it
+	if "scaffold" in  missing_terms or "start" in missing_terms or "end" in missing_terms:
 		print "Please make sure to have the necessary information:"
-		print missing_terms
+		print important_missing_terms
 		sys.exit(1)
 
+	#guarenteed to have a scaffold
+	return_list.append(entries["scaffold"])
+	
+	#if source is not missing then put it into the return list
+	if "source" not in missing_terms:
+		return_list.append(entries["source"])
+
+	#if missing strand ususally it is in the terms of end < start for compliment strand
 	if "strand" in missing_terms:
 		start = int(entries['start'])
 		end = int(entries['end'])
 		if start < end:
-			if missing_accession:
-				return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+"]
-			else:
-				return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+", entries[keys[5]]]
+			return_list.append(entries["start"])
+			return_list.append(entries["end"])
+			return_list.append("+")
 		else:
-			if missing_accession:
-				return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-"]
-			else:
-				return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-", entries[keys[5]]]
+			return_list.append(entries["end"])
+			return_list.append(entries["start"])
+			return_list.append("-")
 	else:
-		if missing_accession:
-			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]]]
-		else:
-			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]], entries[keys[5]]]
+		return_list.append(entries["start"])
+		return_list.append(entries["end"])
+		return_list.append(entries["strand"])
+
+	#if accession is in the list
+	if "accession" not in missing_terms:
+		return_list.append(entries["accession"])
+
+	return return_list
+	#if "strand" in missing_terms:
+	#	start = int(entries['start'])
+	#	end = int(entries['end'])
+	#	if start < end:
+	#		if missing_accession:
+	#			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+"]
+	#		else:
+	#			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+", entries[keys[5]]]
+	#	else:
+	#		if missing_accession:
+	#			return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-"]
+	#		else:
+	#			return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-", entries[keys[5]]]
+	#else:
+	#	if missing_accession:
+	#		return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]]]
+	#	else:
+	#		return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]], entries[keys[5]]]
 
 def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 	"""
