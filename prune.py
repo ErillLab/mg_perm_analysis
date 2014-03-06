@@ -98,10 +98,6 @@ def checkStrand(entries):
 				important_missing_terms.append(key)
 			missing_terms.append(key)
 
-	#check list of terms to see what is missing and appropiately
-	#if "accession" in missing_terms:
-	#	missing_accession = True
-
 	#if missing important information break it
 	if "scaffold" in  missing_terms or "start" in missing_terms or "end" in missing_terms:
 		print "Please make sure to have the necessary information:"
@@ -137,24 +133,7 @@ def checkStrand(entries):
 		return_list.append(entries["accession"])
 
 	return return_list
-	#if "strand" in missing_terms:
-	#	start = int(entries['start'])
-	#	end = int(entries['end'])
-	#	if start < end:
-	#		if missing_accession:
-	#			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+"]
-	#		else:
-	#			return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],"+", entries[keys[5]]]
-	#	else:
-	#		if missing_accession:
-	#			return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-"]
-	#		else:
-	#			return [entries[keys[0]], entries[keys[1]], entries[keys[3]], entries[keys[2]],"-", entries[keys[5]]]
-	#else:
-	#	if missing_accession:
-	#		return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]]]
-	#	else:
-	#		return [entries[keys[0]], entries[keys[1]], entries[keys[2]], entries[keys[3]],entries[keys[4]], entries[keys[5]]]
+	
 
 def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 	"""
