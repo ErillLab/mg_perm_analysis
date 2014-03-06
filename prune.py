@@ -1,7 +1,7 @@
 """
 Created February 19,2014
-
 @author David Nicholson
+This file is the backend of the filter process. It relies on parameters being passed in from extract.py
 """
 import re, os, sys, time
 import numpy as np
@@ -55,13 +55,13 @@ def load_annotations(filename, pattern, filetype= "FASTA"):
 				#Regex match to gather essential data 
 				match = pattern_object.search(line)
 
-				#ignore lines other than gene annotation lines
+				#ignore lines other than gene annotation lines. Ignore MH0006 because it causes problems
 				if match and "MH0006" not in line:
 					#insert essential data into the array
 					terms = match.groupdict()
 					gene_locations[index] = [checkStrand(terms)]
-					#gene_locations[index] = [[terms['scaffold'], terms['source'], terms['start'], terms['end'], terms['strand'], terms['accession']]]
 					index += 1
+
 		return gene_locations
 
 def checkStrand(entries):
@@ -83,8 +83,7 @@ def checkStrand(entries):
 		>>>> entry
 			["scaffold14_9", "MH0006", "300", "500" , "+", "GL50000"]
 	"""
-	#if the gene is missing an accession number
-	#missing_accession = False
+	#pre-define arrays to hold elements
 	missing_terms = []
 	important_missing_terms = []
 	return_list = []
@@ -180,9 +179,11 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 		with open(metagenome_file, "r") as f:
 
 			while True:
+				#gather header and sequence
 				line = f.readline().strip()
 				seq = f.readline().strip()
-				#print "line inside the file: ", line
+
+				#if at end of the file break out of loop
 				if line == "" or seq == "":
 					break
 
@@ -194,11 +195,12 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 					annotation_line.append(annotations[index][0])
 					index = index + 1
 
-				#use array index just like prev program
 				#if found:
 				if len(annotation_line) > 0:
+					
 					#go through the annotated array
 					for extract in annotation_line:
+						
 						#grab the start and the stop positions of the annotated entries
 						start = int(extract[2])
 						end = int(extract[3])
@@ -206,6 +208,7 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 						#if the original strand
 						if extract[4] == "+":
 							if start - upstream >= 0:
+								
 								#verify that the written sequence is equal to the specified bounds (up,down)stream
 								assert (upstream+downstream) == len(seq[start-upstream:start+downstream]), "%s\n%s" % (line,seq)
 
@@ -217,7 +220,9 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 
 						#The reverse compliment strand
 						else:
+							
 							if end + upstream <= len(seq):
+								
 								#verify that the written sequence is equal to the specified bounds (up,down)stream
 								assert (upstream+downstream) == len(seq[end-downstream:upstream+end]), "%s\n%s" % (line,seq)
 
