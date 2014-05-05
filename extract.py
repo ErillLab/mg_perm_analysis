@@ -17,13 +17,13 @@ at_lab = True
 metahit_pattern = "(?P<accession>GL[\d]+)[^\d]+(?P<source>MH[\d]+)[\S]+(?P<scaffold>(?:scaffold|c)[\d]+_[\d]+):(?P<start>[\d]+):(?P<end>[\d]+):(?P<strand>[+-])(?P<cog>(((eu|me)?[KNCOG]+[\d]+[;]?)|[NA]+|\s)+)"
 #Name of the gene annotation file
 if at_lab:
-	gene_annotation = "MetaGenome/BGI_GeneSet20090523_annotation"
+	gene_annotation = "MetaHit/BGI_GeneSet20090523_annotation"
 else:
 	gene_annotation = "/Users/Dave/Documents/Erill Lab/Metagenome/BGI_GeneSet20090523_annotation"
 
 #The directory that holds all the patient files
 if at_lab:
-	directory = "MetaGenome/Data/"
+	directory = "MetaHit/Data/"
 else:
 	directory = "/Users/Dave/Documents/Erill Lab/Metagenome/Data/"
 
