@@ -28,12 +28,12 @@ def load_annotations(filename, pattern, filetype= "FASTA"):
 
 	Return:
 		annotations: a 2d array that contains essential data
-			Ex. [[scaffold,source, start, end, strand, accession#],[scaffold, source, start, end, strand, accession#]]
+			Ex. [[scaffold,source, start, end, strand, accession#,cog1, cog2 ...],[scaffold, source, start, end, strand, accession#, cog1, cog2 ...]]
 
 	Example:
-		>>> annotations = load_annotations("GENE FILE.fa", "FASTA", "(?P<scaffold>scaffold):(?P<source>MH[\d]+):(?<start>[\d]+):(?<end>[\d]+):(?<strand>[+|-]):(?<accession>accession)")
+		>>> annotations = load_annotations("GENE FILE.fa", "FASTA", "(?P<scaffold>scaffold):(?P<source>MH[\d]+):(?<start>[\d]+):(?<end>[\d]+):(?<strand>[+|-]):(?<accession>accession)(?<cog>cog)")
 		>>> annotations
-			[["scaffold01", "MH001", "1", "100", "+", "accession"], ["scaffold02", "MH001", "300", "900", "-","accession"]] ...]
+			[["scaffold01", "MH00001", "1", "100", "+", "accession", "cog"], ["scaffold02", "MH00001", "300", "900", "-","accession", "cog"]] ...]
 	"""
 	#compile the regular expression to speed up search process
 	pattern_object = re.compile(pattern)
@@ -70,7 +70,7 @@ def checkStrand(entries):
 	If it can find information it will attempt to add information where appropiate.
 	
 	Hopefully an entry will contain a dictionary in the following format:
-		{"scaffold": "scaffold14_9, "source":"MH0006", "start":"300", "end":"500", "strand":"+", "accession":"GL50000"}
+		{"scaffold": "scaffold14_9, "source":"MH0006", "start":"300", "end":"500", "strand":"+", "accession":"GL50000","cog":"COG09123 K0129398"}
 
 	Arguments:
 		a line from a gene annotation file in dictionary format
@@ -79,9 +79,9 @@ def checkStrand(entries):
 		an array of all the essential data in a specified order
 
 	Example:
-		>>>> entry = checkStrand({"scaffold": "scaffold14_9", "source":"MH0006", "start":"300", "end":"500", "strand":"+", "accession":"GL50000"})
+		>>>> entry = checkStrand({"scaffold": "scaffold14_9", "source":"MH0006", "start":"300", "end":"500", "strand":"+", "accession":"GL50000", "cog":"COG09123 K0129398"})
 		>>>> entry
-			["scaffold14_9", "MH0006", "300", "500" , "+", "GL50000"]
+			["scaffold14_9", "MH0006", "300", "500" , "+", "GL50000", "COG09123", "K0129398"]
 	"""
 	#pre-define arrays to hold elements
 	missing_terms = []
@@ -89,7 +89,7 @@ def checkStrand(entries):
 	return_list = []
 
 	#gather necessary key information
-	keys = ["scaffold", "source", "start", "end", "strand", "accession"]
+	keys = ["scaffold", "source", "start", "end", "strand", "accession", "cog"]
 	for key in keys:
 		if key not in entries:
 			#if the program doesn't have information: scaffold, start, end it needs to break
@@ -110,7 +110,7 @@ def checkStrand(entries):
 	if "source" not in missing_terms:
 		return_list.append(entries["source"])
 
-	#if missing strand ususally it is in the terms of end < start for compliment strand
+	#if missing strand (+-) ususally it is in the terms of end < start for compliment strand
 	if "strand" in missing_terms:
 		start = int(entries['start'])
 		end = int(entries['end'])
@@ -130,6 +130,13 @@ def checkStrand(entries):
 	#if accession is in the list
 	if "accession" not in missing_terms:
 		return_list.append(entries["accession"])
+
+	if "cog" not in missing_terms:
+		#add listing of all the cog information
+		cogs = re.split("\s|;", entries["cog"])
+		for cog in cogs:
+			if cog != "":
+				return_list.append(cog)
 
 	return return_list
 	
@@ -153,7 +160,7 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 		A newly created file with the non-coding regions. 
 
 	Ex.
-		>>>parse_files([["scaffold01", "MH001", "1", "100", "+", "accession"], ...], ["MH0001.seq.fa",...])
+		>>>parse_files([["scaffold01", "MH001", "1", "100", "+", "accession", "cog"], ...], ["MH0001.seq.fa",...])
 		>>> 
 			*No output above^. A file should be generated in the same directory as this file.*
 	"""
@@ -191,7 +198,8 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 				#search for the header in the array of annotations
 				#annotation_line = filter(lambda x: x if "%s_%s" % (x[0], x[1]) in line else None, sub_annotations)
 				#annotation_line = [x for x in sub_annotations if "%s_%s" % (x[0], x[1]) in line]
-				while("%s_%s" % (annotations[index][0][0],annotations[index][0][1]) in line):
+
+				while(annotations[index][0] != None and "%s_%s" % (annotations[index][0][0],annotations[index][0][1]) in line):
 					annotation_line.append(annotations[index][0])
 					index = index + 1
 
