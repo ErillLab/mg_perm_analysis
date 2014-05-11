@@ -12,9 +12,9 @@ Ex. python extract.py 300 50
 import sys, time, glob
 import prune as pr
 
-at_lab = False
+at_lab = True
 #File regex pattern to match the metahit gene annotation format
-metahit_pattern = "(?P<accession>GL[\d]+)[^\d]+(?P<source>MH0086)[\S]+(?P<scaffold>(?:scaffold|C)[\d]+_[\d]+):(?P<start>[\d]+):(?P<end>[\d]+):(?P<strand>[+-])(?P<cog>(((eu|me)?[KNCOG]+[\d]+[;]?)|[NA]+|\s)+)"
+metahit_pattern = "(?P<accession>GL[\d]+)[^\d]+(?P<source>MH[\d]+)[\S]+(?P<scaffold>(?:scaffold|c)[\d]+_[\d]+):(?P<start>[\d]+):(?P<end>[\d]+):(?P<strand>[+-])(?P<cog>(((eu|me)?[KNCOG]+[\d]+[;]?)|[NA]+|\s)+)"
 #Name of the gene annotation file
 if at_lab:
 	gene_annotation = "MetaHit/BGI_GeneSet20090523_annotation"
@@ -45,7 +45,7 @@ def main():
 		pr.parse_files(annotations, files, int(sys.argv[1]), int(sys.argv[2]))
 	else:
 		#create the non-coding region files
-		pr.parse_files(annotations, [directory+"MH0086.seq.fa"])
+		pr.parse_files(annotations, files)
 
 	end = time.time()
 	print "Parsing Time: ", (end-an_end)

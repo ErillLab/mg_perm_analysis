@@ -141,7 +141,7 @@ def checkStrand(entries):
 	return return_list
 	
 
-def parse_files(annotations,filenames, upstream = 300, downstream = 50):
+def parse_files(annotations,filenames, upstream = 300, downstream = 0):
 	"""
 	This function parses out the non-coding regions of the metagenome files. 
 	The ouput is a pruned file that contains a fasta file with the regions.
@@ -181,7 +181,7 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 		#sub_annotations = [item for item in [annotation for annotation in annotations] if metagenome_file_header in item]
 		
 		#open file for writing
-		g = open("Pruned_%s.fa" % metagenome_file_header, "w")
+		g = open("MetaHit/Pruned/Pruned_%s.seq.fa" % metagenome_file_header, "w")
 
 		with open(metagenome_file, "r") as f:
 
@@ -198,7 +198,6 @@ def parse_files(annotations,filenames, upstream = 300, downstream = 50):
 				#search for the header in the array of annotations
 				#annotation_line = filter(lambda x: x if "%s_%s" % (x[0], x[1]) in line else None, sub_annotations)
 				#annotation_line = [x for x in sub_annotations if "%s_%s" % (x[0], x[1]) in line]
-
 				while(annotations[index][0] != None and "%s_%s" % (annotations[index][0][0],annotations[index][0][1]) in line):
 					annotation_line.append(annotations[index][0])
 					index = index + 1
